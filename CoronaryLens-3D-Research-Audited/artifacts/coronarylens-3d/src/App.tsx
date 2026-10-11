@@ -1,11 +1,10 @@
-import { useMemo, useState } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import { useMemo, useState, CSSProperties, ReactNode } from 'react';
 import { Link, Route, Router as WouterRouter, Switch, useLocation } from 'wouter';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   Activity, AlertCircle, ArrowRight, BookOpen, Check, ChevronRight, CircleHelp,
   ClipboardList, Database, FileInput, HeartPulse, Info, Layers3, Microscope,
-  Network, RotateCcw, ShieldCheck, SlidersHorizontal, Sparkles, Target, Waypoints,
+  Network, ShieldCheck, SlidersHorizontal, Sparkles, Target, Waypoints, Search
 } from 'lucide-react';
 import CoronaryScene from '@/components/CoronaryScene';
 import {
@@ -28,239 +27,248 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 
-type NavItem = { href: string; label: string; icon: typeof Activity };
-const navItems: NavItem[] = [
+const navItems = [
   { href: '/', label: 'Overview', icon: Activity },
   { href: '/inputs', label: 'Clinical inputs', icon: FileInput },
   { href: '/workspace', label: 'Model workspace', icon: Layers3 },
   { href: '/evidence', label: 'Evidence', icon: Microscope },
   { href: '/methods', label: 'Methods & limits', icon: BookOpen },
 ];
+
 const targetInfo: Record<TargetType, { name: string; color: string }> = {
-  CAD: { name: 'Overall coronary artery disease', color: '#4c8373' },
-  LAD: { name: 'Left anterior descending', color: '#b17a55' },
-  LCX: { name: 'Left circumflex', color: '#7188a1' },
-  RCA: { name: 'Right coronary artery', color: '#98836b' },
+  CAD: { name: 'Overall coronary artery disease', color: '#0ea5e9' },
+  LAD: { name: 'Left anterior descending', color: '#f59e0b' },
+  LCX: { name: 'Left circumflex', color: '#10b981' },
+  RCA: { name: 'Right coronary artery', color: '#8b5cf6' },
 };
 const targetOrder: TargetType[] = [ApiTarget.CAD, ApiTarget.LAD, ApiTarget.LCX, ApiTarget.RCA];
 
-function App() {
-  return <QueryClientProvider client={queryClient}>
-    <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <AppShell />
-    </WouterRouter>
-  </QueryClientProvider>;
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <AppShell />
+      </WouterRouter>
+    </QueryClientProvider>
+  );
 }
 
 function AppShell() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [selectedTarget, setSelectedTarget] = useState<TargetType>(ApiTarget.CAD);
   const [activePrediction, setActivePrediction] = useState<Prediction | null>(null);
   const [explanations, setExplanations] = useState<Partial<Record<TargetType, Explanation>>>({});
   const [demoSource, setDemoSource] = useState<DemoProfile | null>(null);
-  const [, navigate] = useLocation();
 
-  return (
-      <div className="app-shell">
-        <Sidebar location={location} />
-        <div className="main-area">
-          <Header location={location} />
-          <MobileNav location={location} />
-          <Switch>
-            <Route path="/">
-              <Overview onNavigate={navigate} />
-            </Route>
-            <Route path="/inputs">
-              <Inputs values={values} setValues={setValues} demoSource={demoSource} onDemo={setDemoSource} onNavigate={navigate} />
-            </Route>
-            <Route path="/workspace">
-              <Workspace
-                values={values}
-                selectedTarget={selectedTarget}
-                setSelectedTarget={setSelectedTarget}
-                prediction={activePrediction}
-                setPrediction={setActivePrediction}
-                explanations={explanations}
-                setExplanations={setExplanations}
-                onNavigate={navigate}
-              />
-            </Route>
-            <Route path="/evidence"><Evidence /></Route>
-            <Route path="/methods"><Methods /></Route>
-            <Route component={NotFound} />
-          </Switch>
-        </div>
-      </div>
-  );
-}
-
-function Sidebar({ location }: { location: string }) {
-  return (
-    <aside className="sidebar" aria-label="Primary navigation">
-      <Link href="/" className="brand" data-testid="link-brand">
-        <span className="brand-mark"><HeartPulse size={18} strokeWidth={1.8} /></span>
-        <span><span className="brand-name">CoronaryLens</span><span className="brand-sub">RESEARCH WORKBENCH</span></span>
-      </Link>
-      <div>
-        <div className="nav-label">Study environment</div>
-        <nav className="nav-list">
-          {navItems.map(({ href, label, icon: Icon }) => (
-            <Link href={href} key={href} className="nav-link" aria-current={location === href ? 'page' : undefined} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}>
-              <Icon size={16} strokeWidth={1.8} /><span>{label}</span>
-            </Link>
-          ))}
-        </nav>
-      </div>
-      <div className="side-foot">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#c4d4cd', marginBottom: 6 }}>
-          <ShieldCheck size={14} /> Research use only
-        </div>
-        Outputs are model estimates—not a diagnosis, treatment recommendation, or causal explanation.
-      </div>
-    </aside>
-  );
-}
-
-function MobileNav({ location }: { location: string }) {
-  return (
-    <nav className="mobile-nav" aria-label="Primary navigation">
-      {navItems.map(({ href, label, icon: Icon }) => (
-        <Link href={href} key={href} className="nav-link" aria-current={location === href ? 'page' : undefined} data-testid={`mobile-nav-${href.slice(1) || 'overview'}`}>
-          <Icon size={14} /><span>{label}</span>
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
-function Header({ location }: { location: string }) {
-  const current = navItems.find((item) => item.href === location);
   const health = useHealthCheck();
+
   return (
-    <header className="topbar">
-      <div className="crumb">CoronaryLens <ChevronRight size={13} style={{ display: 'inline', verticalAlign: 'middle', margin: '0 4px' }} /> {current?.label ?? 'Not found'}</div>
-      <div className="top-right">
-        <span className="system-pill" data-testid="status-service-health"><span className="dot" style={{ background: health.data ? '#80a794' : health.isError ? '#bc8c7e' : '#c4b787' }} />{health.isLoading ? 'Connecting' : health.data ? 'Service online' : health.isError ? 'Service unavailable' : 'Checking service'}</span>
-        <span className="mono muted" style={{ fontSize: 10 }}>v0.1 · research</span>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <Link href="/" className="brand">
+          <div className="brand-mark"><HeartPulse size={20} strokeWidth={1.8} /></div>
+          <div><div className="brand-name">CoronaryLens</div><div className="brand-sub">RESEARCH WORKBENCH</div></div>
+        </Link>
+        <div style={{ flex: 1 }}>
+          <div className="nav-label">Study Environment</div>
+          <nav className="nav-list">
+            {navItems.map(({ href, label, icon: Icon }) => (
+              <Link href={href} key={href} className="nav-link" aria-current={location === href ? 'page' : undefined}>
+                <Icon size={16} strokeWidth={1.8} /><span>{label}</span>
+              </Link>
+            ))}
+          </nav>
+        </div>
+        <div className="text-xs text-slate-500 font-mono leading-relaxed px-3 border-t border-[#141f28] pt-4">
+          <div className="flex items-center gap-2 mb-2 text-primary"><ShieldCheck size={14} /> Research use only</div>
+          Outputs are model estimates—not a diagnosis or causal explanation.
+        </div>
+      </aside>
+
+      <div className="main-area">
+        <header className="topbar">
+          <div className="crumb">
+            CoronaryLens <ChevronRight size={14} className="inline mx-2 text-slate-600" /> 
+            <span className="text-slate-300">{navItems.find((i) => i.href === location)?.label ?? 'Not found'}</span>
+          </div>
+          <div className="top-right">
+            <span className="status-indicator">
+              <span className="status-dot" style={{ background: health.data ? '#0d9488' : health.isError ? '#be123c' : '#f59e0b' }} />
+              {health.isLoading ? 'Connecting' : health.data ? 'Service online' : health.isError ? 'Service unavailable' : 'Checking service'}
+            </span>
+          </div>
+        </header>
+
+        <Switch>
+          <Route path="/"><Overview onNavigate={navigate} /></Route>
+          <Route path="/inputs">
+            <Inputs values={values} setValues={setValues} demoSource={demoSource} onDemo={setDemoSource} onNavigate={navigate} />
+          </Route>
+          <Route path="/workspace">
+            <Workspace
+              values={values}
+              selectedTarget={selectedTarget}
+              setSelectedTarget={setSelectedTarget}
+              prediction={activePrediction}
+              setPrediction={setActivePrediction}
+              explanations={explanations}
+              setExplanations={setExplanations}
+              onNavigate={navigate}
+            />
+          </Route>
+          <Route path="/evidence"><Evidence /></Route>
+          <Route path="/methods"><Methods /></Route>
+          <Route component={NotFound} />
+        </Switch>
       </div>
-    </header>
+    </div>
   );
 }
 
 function PageHead({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children?: ReactNode }) {
-  return <div className="page-head page-enter">
-    <div><div className="eyebrow" style={{ color: '#68877c' }}>{eyebrow}</div><h1 className="page-title">{title}</h1><p className="page-description">{description}</p></div>
-    {children ? <div className="button-row">{children}</div> : null}
-  </div>;
+  return (
+    <div className="page-head animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div>
+        <div className="eyebrow">{eyebrow}</div>
+        <h1 className="page-title">{title}</h1>
+        <p className="page-description">{description}</p>
+      </div>
+      {children && <div className="flex items-center gap-3 flex-wrap mt-2">{children}</div>}
+    </div>
+  );
 }
 
+// -----------------------------------------------------------------------------
+// OVERVIEW PAGE
+// -----------------------------------------------------------------------------
 function Overview({ onNavigate }: { onNavigate: (path: string) => void }) {
   const readiness = useGetReadiness();
   const data = readiness.data;
-  const health = useHealthCheck();
-  const readinessIsError = readiness.isError;
-  const states = data ? [
-    ['Dataset', data.dataset], ['Feature schema', data.schema], ['Model artifacts', data.models], ['Evaluation', data.evaluation],
-  ] : [];
+
   return (
     <main className="page">
-      <PageHead eyebrow="Cardiovascular modeling · workspace 01" title="A clearer view of model readiness." description="Explore target-specific coronary model outputs, their supporting evidence, and the exact predictors used—without mistaking a research estimate for clinical guidance.">
-        <button className="button button-primary" onClick={() => onNavigate('/inputs')} data-testid="button-begin-profile"><FileInput size={15} /> Open clinical profile <ArrowRight size={14} /></button>
+      <PageHead 
+        eyebrow="Cardiovascular modeling · workspace 01" 
+        title="A clearer view of model readiness." 
+        description="Explore target-specific coronary model outputs, their supporting evidence, and the exact predictors used—without mistaking a research estimate for clinical guidance."
+      >
+        <button className="button button-primary" onClick={() => onNavigate('/inputs')}>
+          <FileInput size={15} /> Open clinical profile <ArrowRight size={14} />
+        </button>
       </PageHead>
-      {readiness.isLoading ? <div className="status-grid grid" aria-label="Loading readiness" data-testid="loading-readiness">{Array.from({ length: 5 }, (_, index) => <div className="card status-card skeleton" key={index} />)}</div> : null}
-      {readinessIsError ? <QueryUnavailable title="Readiness could not be retrieved" detail="The service did not return model readiness. No prediction can be run until the trained artifacts and their status are confirmed." onRetry={() => readiness.refetch()} testId="error-readiness" /> : null}
-      {data ? <>
-        <section className="grid status-grid" aria-label="System readiness" data-testid="readiness-status-grid">
-          <div className="card status-card" data-testid="status-overall-readiness">
-            <div className="status-top"><span>Workbench</span><ShieldCheck size={15} /></div>
-            <div className="status-value">{data.ready ? 'Research ready' : 'Not ready'}</div>
-            <div className="status-note">{data.ready ? 'Artifact checks passed · not clinical approval' : 'Prediction remains unavailable'}</div>
+
+      {readiness.isLoading && <div className="grid status-grid mb-6">{[1,2,3,4,5].map(i => <div key={i} className="card status-card skeleton h-[120px]" />)}</div>}
+      
+      {readiness.isError && <QueryUnavailable title="Readiness could not be retrieved" detail="The service did not return model readiness. No prediction can be run until trained artifacts are confirmed." onRetry={() => readiness.refetch()} />}
+      
+      {data && (
+        <>
+          <section className="grid status-grid mb-4">
+            <div className="card status-card border-b-2 border-b-primary">
+              <div className="status-top"><span>Workbench</span><ShieldCheck size={15} /></div>
+              <div className="status-value">{data.ready ? 'Research ready' : 'Not ready'}</div>
+              <div className="status-note">{data.ready ? 'Artifact checks passed' : 'Prediction remains unavailable'}</div>
+            </div>
+            {[
+              ['Dataset', data.dataset], ['Schema', data.schema], ['Models', data.models], ['Evaluation', data.evaluation]
+            ].map(([label, value]) => (
+              <div className="card status-card border-b-2 border-b-slate-800" key={label}>
+                <div className="status-top"><span>{label}</span><span className="w-2 h-2 rounded-full" style={{ background: value.toLowerCase().includes('ready') || value.toLowerCase().includes('loaded') ? '#10b981' : '#f59e0b' }} /></div>
+                <div className="status-value">{value}</div>
+                <div className="status-note">Backend state</div>
+              </div>
+            ))}
+          </section>
+
+          <div className={`alert ${!data.ready ? 'alert-danger' : ''} mb-8`}>
+            {data.ready ? <Check className="alert-icon" size={17} /> : <AlertCircle className="alert-icon" size={17} />}
+            <div>
+              <strong>{data.ready ? 'Research inference is operational.' : 'Model outputs are not available yet.'}</strong><br/>
+              {data.ready ? 'Artifact and checksum checks passed. Scores are exploratory estimates.' : `Current blockers: ${data.blockers.join(' · ') || 'Service not ready.'}`}
+            </div>
           </div>
-          {states.map(([label, value]) => <div className="card status-card" key={label} data-testid={`status-${label.toLowerCase().replace(' ', '-')}`}>
-            <div className="status-top"><span>{label}</span><span className="dot" style={{ background: readinessColor(value) }} /></div>
-            <div className="status-value">{value}</div><div className="status-note">Backend-reported state</div>
-          </div>)}
-        </section>
-        <div style={{ height: 16 }} />
-        {!data.ready ? <div className="alert" role="status" data-testid="status-not-ready"><AlertCircle className="alert-icon" size={17} />
-          <div><strong>Model outputs are not available yet.</strong><br />This workbench will not estimate or fabricate results. {data.blockers?.length ? `Current blockers: ${data.blockers.join(' · ')}` : 'The service has not confirmed trained model artifacts and evaluation.'}</div>
-        </div> : <div className="alert" role="status" data-testid="status-ready"><Check className="alert-icon" size={17} /><div><strong>Research inference is operational.</strong><br />Artifact and checksum checks passed. This is not clinical approval; scores and explanations are exploratory estimates from a small retrospective cohort.</div></div>}
-      </> : null}
-      <div style={{ height: 18 }} />
-      <div className="grid overview-grid">
+        </>
+      )}
+
+      <div className="grid overview-grid mb-8">
         <section className="card card-pad">
-          <div className="target-header"><div><h2 className="section-title">Four distinct targets</h2><div className="section-caption">Separate model outputs; vessel results are not interchangeable.</div></div><Waypoints size={18} color="#66897e" /></div>
-          <div className="table-wrap">
-            <table className="data-table" aria-label="Prediction target definitions" data-testid="table-target-definitions">
-              <thead><tr><th>Target</th><th>Scope</th><th>How to read it</th></tr></thead>
+          <div className="flex justify-between items-start mb-6">
+            <div><h2 className="section-title">Four distinct targets</h2><p className="section-caption">Separate model outputs</p></div>
+            <Waypoints size={18} className="text-slate-500" />
+          </div>
+          <div className="rounded-md border border-slate-800 overflow-hidden">
+            <table className="data-table">
+              <thead><tr><th>Target</th><th>Scope</th><th>Interpretation</th></tr></thead>
               <tbody>
-                <tr><td><span className="target-chip">CAD</span></td><td>Overall coronary artery disease</td><td>Summary target; not a vessel location</td></tr>
-                <tr><td><span className="target-chip">LAD</span></td><td>Left anterior descending</td><td>Independent target output</td></tr>
-                <tr><td><span className="target-chip">LCX</span></td><td>Left circumflex</td><td>Independent target output</td></tr>
-                <tr><td><span className="target-chip">RCA</span></td><td>Right coronary artery</td><td>Independent target output</td></tr>
+                <tr><td><span className="target-chip">CAD</span></td><td>Overall disease</td><td>Summary target; not a vessel</td></tr>
+                <tr><td><span className="target-chip">LAD</span></td><td>Left anterior desc.</td><td>Independent output</td></tr>
+                <tr><td><span className="target-chip">LCX</span></td><td>Left circumflex</td><td>Independent output</td></tr>
+                <tr><td><span className="target-chip">RCA</span></td><td>Right coronary art.</td><td>Independent output</td></tr>
               </tbody>
             </table>
           </div>
         </section>
-        <section className="card card-pad" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 245 }}>
-          <div><div className="eyebrow" style={{ color: '#81918b' }}>Interpretation guardrail</div><h2 className="section-title" style={{ fontSize: 20, marginTop: 9 }}>An estimate is not an explanation.</h2>
-            <p className="inline-note" style={{ fontSize: 12, marginTop: 10 }}>Model contributions describe how predictors relate to a model output. They do not establish causality, a clinical diagnosis, or where disease is located in an individual anatomy.</p>
+        
+        <section className="card card-pad flex flex-col justify-between">
+          <div>
+            <div className="text-primary font-mono text-[10px] uppercase tracking-wider mb-2">Interpretation Guardrail</div>
+            <h2 className="section-title text-xl mb-3">An estimate is not an explanation.</h2>
+            <p className="inline-note text-slate-400">Model contributions describe relationships to a model output. They do not establish causality, a diagnosis, or where disease is located.</p>
           </div>
-          <Link href="/methods" className="button button-small" style={{ width: 'fit-content' }} data-testid="link-methods-overview">Read methods & limits <ArrowRight size={13} /></Link>
+          <Link href="/methods" className="button mt-6 w-fit">Read methods & limits <ArrowRight size={13} /></Link>
         </section>
       </div>
-      <div style={{ height: 18 }} />
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(230px,1fr))' }}>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-5">
         <QuickLink icon={SlidersHorizontal} title="Profile editor" text="Use only predictors defined by the active clinical schema." href="/inputs" />
         <QuickLink icon={Layers3} title="Model workspace" text="Inspect model output next to schematic, selectable anatomy." href="/workspace" />
         <QuickLink icon={Database} title="Validation evidence" text="See reported evaluation metrics and registry details." href="/evidence" />
       </div>
-      <div style={{ height: 16 }} />
-      <div className="inline-note" data-testid="text-service-summary"><CircleHelp size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 5 }} />Service status: {health.isLoading ? 'checking' : health.data?.status ?? (health.isError ? 'unavailable' : 'not reported')} · readiness is determined by the connected service.</div>
     </main>
   );
 }
 
-function readinessColor(value: string) {
-  const normalized = value.toLowerCase();
-  if (normalized.includes('ready') || normalized.includes('available') || normalized.includes('loaded')) return '#79a18e';
-  if (normalized.includes('missing') || normalized.includes('unavailable') || normalized.includes('not')) return '#c38c7a';
-  return '#b9a975';
-}
-
 function QuickLink({ icon: Icon, title, text, href }: { icon: typeof Activity; title: string; text: string; href: string }) {
-  return <Link href={href} className="card card-pad" style={{ textDecoration: 'none', color: 'inherit', display: 'flex', gap: 13, alignItems: 'flex-start' }} data-testid={`link-quick-${href.slice(1)}`}>
-    <span style={{ color: '#608777', paddingTop: 1 }}><Icon size={17} /></span><span><strong style={{ display: 'block', font: '600 13px var(--app-font-serif)' }}>{title}</strong><span className="inline-note">{text}</span></span><ArrowRight size={13} style={{ marginLeft: 'auto', color: '#9aa7a1', flex: 'none' }} />
-  </Link>;
+  return (
+    <Link href={href} className="card card-pad flex gap-4 items-start no-underline transition-all hover:border-slate-600 hover:bg-slate-800/20">
+      <div className="text-primary mt-1"><Icon size={20} /></div>
+      <div>
+        <strong className="block text-slate-200 font-semibold mb-1">{title}</strong>
+        <span className="text-xs text-slate-400 leading-relaxed">{text}</span>
+      </div>
+      <ArrowRight size={14} className="ml-auto text-slate-600 mt-1" />
+    </Link>
+  );
 }
 
-function QueryUnavailable({ title, detail, onRetry, testId }: { title: string; detail: string; onRetry: () => void; testId: string }) {
-  return <div className="alert alert-danger" role="alert" data-testid={testId}><AlertCircle className="alert-icon" size={17} /><div style={{ flex: 1 }}><strong>{title}.</strong><br />{detail}<div style={{ marginTop: 9 }}><button className="button button-small" onClick={onRetry} data-testid={`button-retry-${testId}`}>Retry request</button></div></div></div>;
-}
-
-function Inputs({ values, setValues, demoSource, onDemo, onNavigate }: {
-  values: Record<string, unknown>; setValues: (values: Record<string, unknown>) => void;
-  demoSource: DemoProfile | null; onDemo: (profile: DemoProfile | null) => void; onNavigate: (path: string) => void;
-}) {
+// -----------------------------------------------------------------------------
+// CLINICAL INPUTS
+// -----------------------------------------------------------------------------
+function Inputs({ values, setValues, demoSource, onDemo, onNavigate }: any) {
   const schemaQuery = useGetClinicalSchema();
   const demoQuery = useGetDemoProfile({ query: { enabled: false, queryKey: getGetDemoProfileQueryKey() } });
   const readinessQuery = useGetReadiness();
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState("");
+  
   const schema = schemaQuery.data;
+  
   const grouped = useMemo(() => {
     const map = new Map<string, FeatureDefinition[]>();
     schema?.predictors?.forEach((feature) => {
       if (isForbidden(feature, schema.forbidden_predictors)) return;
+      if (search && !feature.name.toLowerCase().includes(search.toLowerCase()) && !feature.label.toLowerCase().includes(search.toLowerCase())) return;
       map.set(feature.group, [...(map.get(feature.group) ?? []), feature]);
     });
     return [...map.entries()];
-  }, [schema]);
-  const requiredCount = schema?.predictors.filter((feature) => feature.required && !isForbidden(feature, schema.forbidden_predictors)).length ?? 0;
-  const completedRequired = schema?.predictors.filter((feature) => feature.required && !isForbidden(feature, schema.forbidden_predictors) && hasValue(values[feature.name])).length ?? 0;
+  }, [schema, search]);
+
+  const requiredCount = schema?.predictors.filter((f) => f.required && !isForbidden(f, schema.forbidden_predictors)).length ?? 0;
+  const completedRequired = schema?.predictors.filter((f) => f.required && !isForbidden(f, schema.forbidden_predictors) && hasValue(values[f.name])).length ?? 0;
   const profileComplete = Boolean(schema && Object.keys(filterPredictorValues(values, schema)).length > 0 && completedRequired === requiredCount &&
-    schema.predictors.filter((feature) => !isForbidden(feature, schema.forbidden_predictors))
-      .every((feature) => !hasValue(values[feature.name]) || !validateFeature(feature, values[feature.name])));
+    schema.predictors.filter((f) => !isForbidden(f, schema.forbidden_predictors))
+      .every((f) => !hasValue(values[f.name]) || !validateFeature(f, values[f.name])));
 
   const setField = (feature: FeatureDefinition, raw: string) => {
     const next = { ...values };
@@ -269,131 +277,153 @@ function Inputs({ values, setValues, demoSource, onDemo, onNavigate }: {
     else next[feature.name] = raw;
     setValues(next);
     const error = validateFeature(feature, next[feature.name]);
-    setLocalErrors((previous) => {
-      const copy = { ...previous };
-      if (error) copy[feature.name] = error;
-      else delete copy[feature.name];
-      return copy;
-    });
+    setLocalErrors((prev) => ({ ...prev, [feature.name]: error || '' }));
   };
 
   const loadDemo = async () => {
     onDemo(null);
     try {
-      const response = await demoQuery.refetch();
-      if (response.data) {
-        const filtered = filterPredictorValues(response.data.values, schema);
-        setValues(filtered);
-        onDemo(response.data);
+      const resp = await demoQuery.refetch();
+      if (resp.data) {
+        setValues(filterPredictorValues(resp.data.values, schema));
+        onDemo(resp.data);
         setLocalErrors({});
       }
-    } catch {
-      // The query error is rendered below; no substitute profile is created.
-    }
+    } catch {}
   };
 
   const attemptContinue = () => {
     if (!schema) return;
     const errors: Record<string, string> = {};
-    schema.predictors.filter((feature) => !isForbidden(feature, schema.forbidden_predictors)).forEach((feature) => {
-      const error = validateFeature(feature, values[feature.name]);
-      if (error && (feature.required || hasValue(values[feature.name]))) errors[feature.name] = error;
+    schema.predictors.filter((f) => !isForbidden(f, schema.forbidden_predictors)).forEach((f) => {
+      const error = validateFeature(f, values[f.name]);
+      if (error && (f.required || hasValue(values[f.name]))) errors[f.name] = error;
     });
     setLocalErrors(errors);
-    if (!profileComplete || Object.keys(errors).length) return;
+    if (!profileComplete || Object.keys(errors).length > 0) return;
     onNavigate('/workspace');
   };
 
-  return <main className="page">
-    <PageHead eyebrow="Input profile · schema controlled" title="Clinical profile" description="Enter a complete profile using the active approved predictor schema. No clinical features are inferred or prefilled; the optional demonstration profile is retrieved from the service.">
-      <button className="button" disabled={!schema || demoQuery.isFetching} onClick={loadDemo} data-testid="button-load-demo-profile">
-        {demoQuery.isFetching ? <span className="skeleton" style={{ width: 12, height: 12 }} /> : <RotateCcw size={14} />} Load service demo profile
-      </button>
-      <button className="button button-primary" disabled={!schema || !profileComplete || readinessQuery.data?.ready !== true} onClick={attemptContinue} data-testid="button-continue-workspace">Review profile <ArrowRight size={14} /></button>
-    </PageHead>
-    <div className="alert" style={{ marginBottom: 16 }} data-testid="notice-input-scope"><Info className="alert-icon" size={16} /><div><strong>Predictors only.</strong> Target labels (CAD, Cath, LAD, LCX, RCA) are excluded from the predictor payload. Required fields must be complete; optional blank fields are omitted.</div></div>
-    {schemaQuery.isLoading ? <div className="form-groups" aria-label="Loading feature schema" data-testid="loading-schema">{[1, 2, 3].map((item) => <div className="card form-group skeleton" key={item} style={{ height: 145 }} />)}</div> : null}
-    {schemaQuery.isError ? <QueryUnavailable title="Clinical schema unavailable" detail="Without the approved schema, predictor names and value semantics cannot be verified. Profile editing and submission are disabled." onRetry={() => schemaQuery.refetch()} testId="error-schema" /> : null}
-    {schema && <>
-      <div className="card card-pad" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }} data-testid="schema-summary">
-        <div><div className="eyebrow" style={{ color: '#87948e' }}>Schema {schema.schema_version}</div><div style={{ fontSize: 12, marginTop: 6, color: '#556565' }}>{schema.predictor_count} predictors · source: {schema.source}</div></div>
-        <div className="badge" data-testid="status-profile-completeness"><span className="dot" style={{ background: profileComplete ? '#6c9d83' : '#c0aa70' }} />{completedRequired} / {requiredCount} required fields</div>
+  return (
+    <main className="page">
+      <PageHead 
+        eyebrow="Input profile · schema controlled" 
+        title="Clinical profile" 
+        description="Enter a complete profile using the active validated predictor schema. No features are inferred. Use the synthetic profile for a safe demonstration."
+      >
+        <button className="button" disabled={!schema || demoQuery.isFetching} onClick={loadDemo}>
+          {demoQuery.isFetching ? <div className="skeleton w-3 h-3 rounded-full" /> : <Sparkles size={14} className="text-primary" />} 
+          Load synthetic demo profile
+        </button>
+        <button className="button button-primary" disabled={!schema || !profileComplete || readinessQuery.data?.ready !== true} onClick={attemptContinue}>
+          Review profile <ArrowRight size={14} />
+        </button>
+      </PageHead>
+
+      <div className="alert mb-6">
+        <Info size={16} className="alert-icon" />
+        <div><strong>Predictors only.</strong> Target labels are excluded from the predictor payload. Optional blank fields are safely omitted.</div>
       </div>
-      {demoSource ? <div className="alert" style={{ marginBottom: 14 }} data-testid="status-demo-profile-loaded"><Check size={16} className="alert-icon" /><div><strong>{demoSource.label}</strong> · Loaded from the backend demo-profile endpoint. <span>{demoSource.provenance}</span></div></div> : null}
-      {demoQuery.isError ? <QueryUnavailable title="Demo profile could not be loaded" detail="No placeholder profile has been substituted. Retry to request the service-approved profile." onRetry={loadDemo} testId="error-demo-profile" /> : null}
-      {!grouped.length ? <EmptyState title="No approved predictors returned" text="The schema contains no usable predictor definitions. Profile entry is unavailable." /> :
-        <div className="form-groups" style={{ marginTop: 14 }}>
-          {grouped.map(([group, features]) => <section className="card form-group" key={group} data-testid={`group-predictors-${slug(group)}`}>
-            <div className="target-header"><div><h2 className="section-title">{group}</h2><div className="section-caption">{features.length} schema-defined field{features.length === 1 ? '' : 's'}</div></div><span className="mono muted" style={{ fontSize: 10 }}>INPUT GROUP</span></div>
-            <div className="fields-grid">{features.map((feature) => <SchemaField key={feature.name} feature={feature} value={values[feature.name]} error={localErrors[feature.name]} onChange={(raw) => setField(feature, raw)} />)}</div>
-          </section>)}
-        </div>}
-      {schema.forbidden_predictors.length > 0 ? <div className="inline-note" style={{ marginTop: 14 }} data-testid="text-forbidden-predictors">Excluded target/forbidden fields: {schema.forbidden_predictors.join(', ')}</div> : null}
-      {readinessQuery.data?.ready !== true ? <div className="alert" style={{ marginTop: 14 }} role="status" data-testid="status-prediction-blocked"><AlertCircle className="alert-icon" size={16} /><div><strong>Prediction is gated.</strong> The service has not confirmed that real trained artifacts are ready. You can inspect schema fields, but cannot submit a model request.</div></div> : null}
-    </>}
-  </main>;
+
+      {schemaQuery.isLoading && <div className="form-groups mb-8"><div className="card h-48 skeleton" /><div className="card h-48 skeleton" /></div>}
+      {schemaQuery.isError && <QueryUnavailable title="Clinical schema unavailable" detail="Cannot verify predictor namespace." onRetry={() => schemaQuery.refetch()} />}
+      
+      {schema && (
+        <>
+          <div className="card card-pad flex items-center justify-between gap-4 flex-wrap mb-6 border-l-4 border-l-primary">
+            <div>
+              <div className="eyebrow !mb-1 text-slate-400">Schema {schema.schema_version}</div>
+              <div className="text-xs text-slate-500 font-mono">{schema.predictor_count} predictors · source: {schema.source}</div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input type="text" placeholder="Search predictors..." className="field-input pl-8 py-1.5 w-48" value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              <span className={`status-indicator border-${profileComplete ? 'primary' : 'slate-700'}`}>
+                <span className="status-dot" style={{ background: profileComplete ? '#10b981' : '#f59e0b' }} />
+                {completedRequired} / {requiredCount} required fields
+              </span>
+            </div>
+          </div>
+
+          {demoSource && (
+            <div className="alert mb-6">
+              <Check size={16} className="alert-icon" />
+              <div><strong>{demoSource.label}</strong> · synthetic demo endpoint successfully parsed. <span className="text-slate-500 ml-2">{demoSource.provenance}</span></div>
+            </div>
+          )}
+
+          <div className="form-groups">
+            {grouped.map(([group, features]) => (
+              <section className="card card-pad" key={group}>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="section-title text-lg">{group}</h2>
+                    <p className="section-caption">{features.length} schema-defined fields</p>
+                  </div>
+                </div>
+                <div className="fields-grid">
+                  {features.map((feature) => (
+                    <SchemaField key={feature.name} feature={feature} value={values[feature.name]} error={localErrors[feature.name]} onChange={(raw: string) => setField(feature, raw)} />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+
+          {readinessQuery.data?.ready !== true && (
+            <div className="alert alert-danger mt-6">
+              <AlertCircle size={16} className="alert-icon" />
+              <div><strong>Prediction is gated.</strong> The real trained artifacts are not ready yet.</div>
+            </div>
+          )}
+        </>
+      )}
+    </main>
+  );
 }
 
-function isForbidden(feature: FeatureDefinition, forbidden: string[] = []) {
-  const key = normalize(feature.name);
-  const label = normalize(feature.label);
-  const protectedKeys = new Set(['cad', 'cath', 'lad', 'lcx', 'rca']);
-  return protectedKeys.has(key) || protectedKeys.has(label) || forbidden.some((entry) => normalize(entry) === key || normalize(entry) === label);
+function SchemaField({ feature, value, error, onChange }: any) {
+  const id = `field-${feature.name}`;
+  const numberValue = value == null ? '' : String(value);
+  return (
+    <div>
+      <label className="field-label" htmlFor={id}>
+        {feature.label}{feature.required && <span className="text-rose-500 ml-1">*</span>}
+        {feature.unit && <span className="text-slate-500 font-normal ml-1">({feature.unit})</span>}
+      </label>
+      {feature.categories?.length ? (
+        <select id={id} className="field-input" value={numberValue} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Select a value</option>
+          {feature.categories.map((cat: string) => <option key={cat} value={cat}>{cat}</option>)}
+        </select>
+      ) : (
+        <input id={id} className="field-input" type="text" value={numberValue} onChange={(e) => onChange(e.target.value)} />
+      )}
+      <div className="field-help">{feature.description || feature.type}</div>
+      {error && <div className="field-error">{error}</div>}
+    </div>
+  );
 }
 
-function normalize(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
-function slug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); }
-function hasValue(value: unknown) { return value !== undefined && value !== null && value !== ''; }
-function validateFeature(feature: FeatureDefinition, value: unknown): string | undefined {
-  if (!hasValue(value)) return feature.required ? 'This field is required.' : undefined;
-  if ((feature.type === 'numeric' || (feature.type === 'ordinal' && !feature.categories?.length)) && (typeof value !== 'number' || !Number.isFinite(value))) return 'Enter a valid number.';
-  if (typeof value === 'number') {
-    if (feature.minimum != null && value < feature.minimum) return `Minimum value is ${feature.minimum}.`;
-    if (feature.maximum != null && value > feature.maximum) return `Maximum value is ${feature.maximum}.`;
-  }
-  if (feature.categories?.length && !feature.categories.includes(String(value))) return 'Choose a schema-defined category.';
-  return undefined;
-}
-function filterPredictorValues(profile: Record<string, unknown>, schema?: ClinicalSchema): Record<string, unknown> {
-  if (!schema) return {};
-  const allowed = new Set(schema.predictors.filter((feature) => !isForbidden(feature, schema.forbidden_predictors)).map((feature) => feature.name));
-  return Object.fromEntries(Object.entries(profile).filter(([key]) => allowed.has(key)));
-}
-
-function SchemaField({ feature, value, error, onChange }: { feature: FeatureDefinition; value: unknown; error?: string; onChange: (value: string) => void }) {
-  const id = `field-${slug(feature.name)}`;
-  const categories = feature.categories ?? [];
-  const numberValue = value === undefined || value === null ? '' : String(value);
-  return <div>
-    <label className="field-label" htmlFor={id}>{feature.label}{feature.required ? <span className="required">*</span> : null}{feature.unit ? <span className="muted" style={{ fontWeight: 400 }}> ({feature.unit})</span> : null}</label>
-    {categories.length ? <select id={id} className="field-input" value={numberValue} onChange={(event) => onChange(event.target.value)} aria-required={feature.required} aria-invalid={Boolean(error)} aria-describedby={`${id}-help ${error ? `${id}-error` : ''}`} data-testid={`input-${slug(feature.name)}`}>
-      <option value="">Select a value</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}
-    </select> : <input id={id} className="field-input" type={feature.type === 'numeric' || feature.type === 'ordinal' ? 'number' : 'text'} value={numberValue} onChange={(event) => onChange(event.target.value)} min={feature.minimum ?? undefined} max={feature.maximum ?? undefined} step={feature.type === 'numeric' ? 'any' : 1} aria-required={feature.required} aria-invalid={Boolean(error)} aria-describedby={`${id}-help ${error ? `${id}-error` : ''}`} data-testid={`input-${slug(feature.name)}`} />}
-    <div className="field-help" id={`${id}-help`}>{feature.description || `${feature.type}${feature.semantics_verified ? ' · semantics verified' : ' · semantics not verified'}`}{feature.minimum != null || feature.maximum != null ? ` · range ${feature.minimum ?? '—'} to ${feature.maximum ?? '—'}` : ''}</div>
-    {error ? <div className="field-error" id={`${id}-error`} role="alert">{error}</div> : null}
-  </div>;
-}
-
-function EmptyState({ title, text }: { title: string; text: string }) {
-  return <div className="card card-pad" data-testid="empty-state"><Network size={20} color="#82978c" /><h3 className="section-title" style={{ marginTop: 12 }}>{title}</h3><p className="inline-note">{text}</p></div>;
-}
-
-function Workspace({ values, selectedTarget, setSelectedTarget, prediction, setPrediction, explanations, setExplanations, onNavigate }: {
-  values: Record<string, unknown>; selectedTarget: TargetType; setSelectedTarget: (target: TargetType) => void;
-  prediction: Prediction | null; setPrediction: (prediction: Prediction | null) => void;
-  explanations: Partial<Record<TargetType, Explanation>>; setExplanations: (value: Partial<Record<TargetType, Explanation>>) => void;
-  onNavigate: (path: string) => void;
-}) {
+// -----------------------------------------------------------------------------
+// WORKSPACE (3D + INFERENCE)
+// -----------------------------------------------------------------------------
+function Workspace({ values, selectedTarget, setSelectedTarget, prediction, setPrediction, explanations, setExplanations, onNavigate }: any) {
   const schemaQuery = useGetClinicalSchema();
   const readinessQuery = useGetReadiness();
   const predictionMutation = useCreatePrediction();
   const explanationMutation = useExplainPrediction();
+
   const schema = schemaQuery.data;
-  const safeValues = useMemo(() => filterPredictorValues(values, schema), [values, schema]);
-  const usableFeatures = schema?.predictors.filter((feature) => !isForbidden(feature, schema.forbidden_predictors)) ?? [];
-  const complete = Boolean(schema && usableFeatures.some((feature) => hasValue(safeValues[feature.name])) &&
-    usableFeatures.filter((feature) => feature.required).every((feature) => hasValue(safeValues[feature.name])) &&
-    usableFeatures.every((feature) => !hasValue(safeValues[feature.name]) || !validateFeature(feature, safeValues[feature.name])));
+  const safeValues = filterPredictorValues(values, schema);
+  
+  const usableFeatures = schema?.predictors.filter((f) => !isForbidden(f, schema.forbidden_predictors)) ?? [];
+  const complete = Boolean(schema && usableFeatures.some((f) => hasValue(safeValues[f.name])) &&
+    usableFeatures.filter((f) => f.required).every((f) => hasValue(safeValues[f.name])) &&
+    usableFeatures.every((f) => !hasValue(safeValues[f.name]) || !validateFeature(f, safeValues[f.name])));
+  
   const canPredict = readinessQuery.data?.ready === true && complete && !schemaQuery.isError && Object.keys(safeValues).length > 0;
   const matchingExplanation = explanations[selectedTarget]?.prediction_request_id === prediction?.request_id ? explanations[selectedTarget] : undefined;
 
@@ -401,208 +431,295 @@ function Workspace({ values, selectedTarget, setSelectedTarget, prediction, setP
     if (!canPredict) return;
     setExplanations({});
     setPrediction(null);
-    predictionMutation.mutate({ data: { values: safeValues } }, { onSuccess: (response) => setPrediction(response) });
+    predictionMutation.mutate({ data: { values: safeValues } }, { onSuccess: setPrediction });
   };
+
   const requestExplanation = () => {
     if (!prediction || !safeValues) return;
-    explanationMutation.mutate({ target: selectedTarget, data: { values: safeValues, prediction_request_id: prediction.request_id } }, {
-      onSuccess: (response) => {
-        if (response.prediction_request_id === prediction.request_id && response.target === selectedTarget) setExplanations({ ...explanations, [selectedTarget]: response });
-      },
-    });
+    explanationMutation.mutate(
+      { target: selectedTarget, data: { values: safeValues, prediction_request_id: prediction.request_id } },
+      {
+        onSuccess: (resp) => setExplanations((prev: any) => ({ ...prev, [selectedTarget]: resp }))
+      }
+    );
   };
+
   const selectedOutput = prediction?.outputs?.[selectedTarget];
-  const vesselScores = useMemo(() => ({
+  const vesselScores = {
     LAD: prediction?.outputs?.LAD?.score_semantics === 'probability' ? prediction.outputs.LAD.score : undefined,
     LCX: prediction?.outputs?.LCX?.score_semantics === 'probability' ? prediction.outputs.LCX.score : undefined,
     RCA: prediction?.outputs?.RCA?.score_semantics === 'probability' ? prediction.outputs.RCA.score : undefined,
-  }), [prediction]);
-  return <main className="page">
-    <PageHead eyebrow="Target-specific output · anatomy explorer" title="Model workspace" description="Review each model target independently beside a general schematic of coronary anatomy. CAD is a global dataset label; LAD, LCX and RCA are separate vessel labels. This display is illustrative—not a patient-specific lesion map.">
-      <Link href="/inputs" className="button" data-testid="link-edit-profile"><SlidersHorizontal size={14} /> Edit profile</Link>
-      <button className="button button-primary" onClick={runPrediction} disabled={!canPredict || predictionMutation.isPending} data-testid="button-run-models">
-        {predictionMutation.isPending ? <span className="skeleton" style={{ width: 12, height: 12 }} /> : <Activity size={14} />}{predictionMutation.isPending ? 'Requesting models' : 'Run four target models'}
-      </button>
-    </PageHead>
-    {!canPredict ? <div className="alert" style={{ marginBottom: 16 }} data-testid="status-workspace-blocked"><AlertCircle size={16} className="alert-icon" /><div><strong>Prediction is unavailable.</strong> {!schema ? 'The approved clinical schema has not loaded. ' : !complete ? 'A complete schema-validated clinical profile is required. ' : ''}{readinessQuery.data?.ready !== true ? 'Real trained model artifacts have not been confirmed ready. ' : ''}<Link href="/inputs" style={{ color: '#326f60', fontWeight: 700 }} data-testid="link-workspace-inputs">Review clinical inputs</Link></div></div> : null}
-    {predictionMutation.isError ? <QueryUnavailable title="Model request was unavailable" detail="The service did not return a prediction. No output has been substituted. Check readiness and try again when trained artifacts are available." onRetry={runPrediction} testId="error-prediction" /> : null}
-    {predictionMutation.isPending ? <div className="card card-pad" role="status" data-testid="loading-prediction" style={{ marginBottom: 16 }}><div className="skeleton" style={{ height: 13, width: '35%' }} /><div className="skeleton" style={{ height: 52, marginTop: 14 }} /></div> : null}
-    <div className="anatomy-layout">
-      <section className="anatomy-panel" aria-label="Schematic coronary anatomy">
-        <div className="anatomy-toolbar"><span className="badge"><span className="dot" /> GENERAL ANATOMY SCHEMATIC</span><span className="mono muted" style={{ fontSize: 10 }}>NOT PATIENT-SPECIFIC</span></div>
-        <CoronaryScene selected={selectedTarget} onSelect={setSelectedTarget} scores={vesselScores} />
-        <div className="risk-legend" role="note" aria-label="Vessel color legend">
-          <span className="risk-legend-title">Vessel color</span>
-          <span className="risk-legend-gradient" aria-hidden="true" />
-          <span>Lower</span><span>Higher</span>
-          <span className="risk-legend-note">model-estimated positive-class score · not a clinical threshold</span>
-        </div>
-      </section>
-      <aside>
-        <div className="eyebrow" style={{ color: '#82908a', margin: '3px 0 9px' }}>Select output target</div>
-        <div className="vessel-select" role="group" aria-label="Choose prediction target">
-          {targetOrder.map((target) => <button key={target} className={`target-button ${selectedTarget === target ? 'active' : ''}`} onClick={() => setSelectedTarget(target)} aria-pressed={selectedTarget === target} data-testid={`button-select-${target.toLowerCase()}`} style={{ '--vessel-color': targetInfo[target].color } as CSSProperties}>
-            <span><span className="target-acronym">{target}</span><span className="target-name">{targetInfo[target].name}</span></span>{target === 'CAD' ? <span className="global-target-badge">GLOBAL</span> : <span className="target-swatch" />}
-          </button>)}
-        </div>
-        <div className="target-result" style={{ marginTop: 14 }} data-testid={`result-target-${selectedTarget.toLowerCase()}`}>
-          <div className="target-header"><span className="metric-label">{selectedTarget} model output</span><Target size={15} color={targetInfo[selectedTarget].color} /></div>
-          {selectedOutput ? <>
-            <div className="score-placeholder" data-testid={`value-score-${selectedTarget.toLowerCase()}`}>{formatScore(selectedOutput.score, selectedOutput.score_semantics)}</div>
-            <div className="inline-note">{selectedOutput.score_semantics === 'probability' ? 'Model-estimated positive-class probability (not clinically calibrated)' : 'Model score · not a probability'}{selectedOutput.predicted_class ? ` · predicted dataset label ${selectedOutput.predicted_class}` : ''}</div>
-            <div className="divider" />
-            <div className="inline-note">Model {selectedOutput.model_family} · {selectedOutput.model_version}{selectedOutput.threshold != null ? ` · threshold ${selectedOutput.threshold}` : ''}</div>
-          </> : <><div className="score-placeholder">Not available</div><div className="inline-note">No successful response for this target in this session.</div></>}
-        </div>
-        {selectedTarget === ApiTarget.CAD ? <div className="inline-note" style={{ marginTop: 11 }} data-testid="note-cad-summary"><Info size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />CAD is an overall summary output; it is not assigned to a single vessel.</div> : null}
-      </aside>
-    </div>
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(280px,.75fr)', marginTop: 16 }}>
-      <section className="card card-pad">
-        <div className="target-header"><div><h2 className="section-title">Output interpretation</h2><div className="section-caption">Reported for the selected target only</div></div><span className="target-chip">{selectedTarget}</span></div>
-        {selectedOutput ? <div className="alert" style={{ marginTop: 13 }} data-testid="status-output-semantics"><Info size={15} className="alert-icon" /><div>{selectedOutput.score_semantics === 'probability' ? 'The backend identifies this value as a probability. It is not an individualized diagnosis.' : 'The backend identifies this as a model score. Do not interpret it as a probability.'} {prediction?.warnings?.join(' ')}</div></div> :
-          <EmptyState title="No target output to interpret" text="Run the four-model request after readiness is confirmed and a complete approved profile is available." />}
-        {prediction ? <div className="inline-note mono" style={{ marginTop: 12 }} data-testid="text-prediction-request">Request {prediction.request_id} · registry {prediction.registry_version}</div> : null}
-      </section>
-      <section className="card card-pad">
-        <div className="target-header"><div><h2 className="section-title">Model explanation</h2><div className="section-caption">Approximate permutation SHAP grouped by source predictor; not causal attribution</div></div><Sparkles size={16} color="#779485" /></div>
-        {!matchingExplanation ? <>
-          <p className="inline-note" style={{ margin: '14px 0' }}>No explanation has been returned for {selectedTarget} in the current request.</p>
-          <button className="button button-small" onClick={requestExplanation} disabled={!prediction || explanationMutation.isPending} data-testid="button-explain-target">
-            {explanationMutation.isPending ? 'Requesting explanation' : 'Request target explanation'}
-          </button>
-        </> : <ExplanationPanel explanation={matchingExplanation} />}
-        {explanationMutation.isError ? <div role="alert" className="field-error" style={{ marginTop: 9 }} data-testid="error-explanation">Explanation unavailable. No contributions are inferred or fabricated.</div> : null}
-      </section>
-    </div>
-    <div className="alert" style={{ marginTop: 16 }} data-testid="notice-anatomy-limit"><Info size={15} className="alert-icon" /><div>The anatomy is a general, schematic orientation model. Selection highlights an artery associated with its distinct model output; it does not indicate a stenosis location or describe a patient-specific scan.</div></div>
-  </main>;
-}
+  };
 
-function formatScore(score: number, semantics: string) {
-  return semantics === 'probability' ? `${(score * 100).toFixed(1)}%` : score.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return (
+    <main className="page">
+      <PageHead 
+        eyebrow="Target-specific output · anatomy explorer" 
+        title="Model workspace" 
+        description="Review models side-by-side using the interactive anatomy viewer. Individual vessel results are distinct. The generic 3D heart is a visual aid, not a patient lesion map."
+      >
+        <button className="button" onClick={() => onNavigate('/inputs')}><SlidersHorizontal size={14}/> Edit profile</button>
+        <button className="button button-primary" onClick={runPrediction} disabled={!canPredict || predictionMutation.isPending}>
+          {predictionMutation.isPending ? <div className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <Activity size={14} />}
+          {predictionMutation.isPending ? 'Requesting inference...' : 'Submit to 4 models'}
+        </button>
+      </PageHead>
+
+      {!canPredict && (
+        <div className="alert alert-danger mb-6">
+          <AlertCircle size={16} className="alert-icon" />
+          <div><strong>Prediction unavailable.</strong> Ensure your clinical profile is valid and the backend artifacts are ready.</div>
+        </div>
+      )}
+
+      {predictionMutation.isError && <QueryUnavailable title="Model request failed" detail="Service did not return predictions." onRetry={runPrediction} />}
+
+      <div className="workspace-layout">
+        <section className="anatomy-container">
+          <div className="anatomy-header">
+            <div className="anatomy-title"><Sparkles size={14} className="text-primary" /> Coronary Structure Interactive View</div>
+            <div className="flex gap-2">
+              <span className="global-badge">3D GLTF</span>
+            </div>
+          </div>
+          <div className="anatomy-viewport">
+            <CoronaryScene selected={selectedTarget} onSelect={setSelectedTarget} scores={vesselScores} />
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-5">
+          <div className="inspector-panel">
+            <div className="inspector-head">
+              <h3 className="text-xs uppercase tracking-widest text-slate-400 font-mono mb-4">Select Target</h3>
+              <div className="target-selector">
+                {targetOrder.map((target) => (
+                  <button 
+                    key={target} 
+                    className={`target-btn ${selectedTarget === target ? 'active' : ''}`}
+                    onClick={() => setSelectedTarget(target)}
+                  >
+                    <div>
+                      <span className="target-acronym">{target}</span>
+                      <span className="target-name">{targetInfo[target].name}</span>
+                    </div>
+                    {target === 'CAD' ? <span className="global-badge">GLOBAL</span> : <span className="target-swatch" style={{ background: targetInfo[target].color }} />}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="inspector-body bg-[#162028]">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-mono text-slate-400 uppercase tracking-wide">{selectedTarget} Output</span>
+                <Target size={16} color={targetInfo[selectedTarget as TargetType].color} />
+              </div>
+              
+              {selectedOutput ? (
+                <>
+                  <div className="score-display">
+                    {selectedOutput.score_semantics === 'probability' ? `${(selectedOutput.score * 100).toFixed(1)}%` : selectedOutput.score.toFixed(4)}
+                  </div>
+                  <div className="text-xs text-slate-400 leading-relaxed mb-4">
+                    {selectedOutput.score_semantics === 'probability' ? 'Uncalibrated positive-class probability' : 'Raw model score'}
+                    {selectedOutput.predicted_class ? ` · predicted label: ${selectedOutput.predicted_class}` : ''}
+                  </div>
+                  <div className="text-[10px] uppercase font-mono text-slate-500 border-t border-slate-700 pt-3 mt-2">
+                    Model: {selectedOutput.model_family} v{selectedOutput.model_version}
+                  </div>
+                </>
+              ) : (
+                <div className="py-2 text-sm text-slate-500">Not requested or unavailable</div>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 mt-6 gap-6">
+        <section className="card card-pad">
+          <div className="flex justify-between items-start mb-6">
+            <div><h2 className="section-title">Model explanation</h2><p className="section-caption">Approximate permutation SHAP contributions</p></div>
+            <Sparkles size={16} className="text-primary" />
+          </div>
+          
+          {!matchingExplanation ? (
+            <div className="text-center py-8 bg-[#0a0f12] rounded-md border border-slate-800">
+              <p className="text-sm text-slate-400 mb-4">No explanation generated yet.</p>
+              <button className="button" onClick={requestExplanation} disabled={!prediction || explanationMutation.isPending}>
+                {explanationMutation.isPending ? 'Requesting...' : 'Generate SHAP Explanation'}
+              </button>
+            </div>
+          ) : (
+            <ExplanationPanel explanation={matchingExplanation} />
+          )}
+          {explanationMutation.isError && <div className="text-rose-500 text-xs mt-2">Explanation query failed.</div>}
+        </section>
+
+        <section className="card card-pad">
+          <div className="flex justify-between items-start mb-6">
+            <div><h2 className="section-title">Interpretation limits</h2><p className="section-caption">Strict boundaries for AI transparency</p></div>
+            <Info size={16} className="text-slate-500" />
+          </div>
+          <ul className="text-sm text-slate-400 space-y-3 pl-4 list-disc">
+            <li>The 3D interactive model is a pre-rendered generic anatomical file, <strong>not</strong> generated from patient imagery.</li>
+            <li>Selecting a region visually isolates it and selects the target; the highlight coloring is an abstract heat mapping of probability.</li>
+            <li>SHAP feature contributions explain <strong>model reliance</strong>, not biological causality.</li>
+            <li>Models evaluated on narrow retrospective cohorts can demonstrate significant population shift.</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  );
 }
 
 function ExplanationPanel({ explanation }: { explanation: Explanation }) {
-  const max = Math.max(...explanation.contributions.map((item) => Math.abs(item.contribution)), 0);
-  return <div data-testid={`panel-explanation-${explanation.target.toLowerCase()}`}>
-    <div className="inline-note" style={{ margin: '10px 0 14px' }}>{explanation.method} · baseline {explanation.baseline} · output space {explanation.output_space}</div>
-    {explanation.contributions.length ? <div className="contribution-list">{explanation.contributions.map((item) => <div className="contribution-item" key={item.feature} data-testid={`contribution-${slug(item.feature)}`}>
-      <span title={item.description ?? item.label}>{item.label}<span className="field-help" style={{ display: 'block' }}>value: {String(item.value)}</span></span>
-      <div className="contribution-bar" aria-label={`${item.direction === 'toward_positive' ? 'Toward positive' : 'Toward negative'} contribution`}>
-        <div className={`contribution-fill ${item.direction === 'toward_negative' ? 'negative' : ''}`} style={{ width: `${max ? Math.max(2, Math.abs(item.contribution) / max * 100) : 0}%` }} />
-      </div><span className="mono">{item.contribution.toPrecision(3)}</span>
-    </div>)}</div> : <div className="inline-note">The service returned no contributions for this target.</div>}
-    {explanation.limitations.length ? <div className="field-help" style={{ marginTop: 14 }}><strong>Limitations</strong><ul style={{ paddingLeft: 16 }}>{explanation.limitations.map((limitation, index) => <li key={`${index}-${limitation}`}>{limitation}</li>)}</ul></div> : null}
-    <div className="inline-note mono" style={{ marginTop: 8 }}>Request {explanation.prediction_request_id} · model {explanation.model_version}</div>
-  </div>;
+  const max = Math.max(...explanation.contributions.map((i) => Math.abs(i.contribution)), 0);
+  return (
+    <div>
+      <div className="flex gap-4 text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-6">
+        <span>Method: {explanation.method}</span>
+        <span>Base: {Number(explanation.baseline).toPrecision(3)}</span>
+      </div>
+      
+      {explanation.contributions.length ? (
+        <div className="contribution-list mb-6">
+          {explanation.contributions.map((item) => (
+            <div className="contribution-item" key={item.feature}>
+              <div className="truncate text-slate-300" title={item.label}>{item.label}</div>
+              <div className="contribution-bar">
+                <div className={`contribution-fill ${item.direction === 'toward_negative' ? 'negative' : ''}`} style={{ width: `${max ? Math.max(2, (Math.abs(item.contribution) / max) * 100) : 0}%` }} />
+              </div>
+              <div className="text-right text-slate-400 font-mono text-xs">{item.contribution.toPrecision(2)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-sm text-slate-500 mb-6">No contributions returned.</div>
+      )}
+      
+      <div className="bg-[#0a0f12] p-4 rounded border border-slate-800 text-xs text-slate-400">
+        <strong className="text-slate-200 block mb-2">Automated Limitations:</strong>
+        <ul className="pl-4 list-disc space-y-1">
+          {explanation.limitations.map((lim, i) => <li key={i}>{lim}</li>)}
+        </ul>
+      </div>
+    </div>
+  );
 }
 
+// -----------------------------------------------------------------------------
+// EVIDENCE & OTHERS
+// -----------------------------------------------------------------------------
 function Evidence() {
   const registryQuery = useGetModelRegistry();
   const evaluationQuery = useGetEvaluation();
-  const registry = registryQuery.data;
-  const evaluation = evaluationQuery.data;
-  return <main className="page">
-    <PageHead eyebrow="Evidence ledger · service reported" title="Validation & model registry" description="Inspect reported model versions, validation approach, and available metrics. Absence of information is shown as unavailable—not estimated." />
-    {(registryQuery.isError || evaluationQuery.isError) ? <div className="alert" style={{ marginBottom: 16 }} data-testid="status-evidence-partial"><AlertCircle size={16} className="alert-icon" /><div>Some evidence could not be retrieved. The sections below reflect only successful service responses.</div></div> : null}
-    <section className="card card-pad" style={{ marginBottom: 16 }}>
-      <div className="target-header"><div><h2 className="section-title">Registry details</h2><div className="section-caption">Model provenance reported by the backend</div></div><Database size={17} color="#728c80" /></div>
-      {registryQuery.isLoading ? <div className="skeleton" style={{ height: 48 }} data-testid="loading-registry" /> : registry ? <RegistryDetails registry={registry} /> : <UnavailableInline label="Model registry" onRetry={() => registryQuery.refetch()} testId="registry-unavailable" />}
-    </section>
-    <section className="card card-pad">
-      <div className="target-header"><div><h2 className="section-title">Measured evaluation</h2><div className="section-caption">Metrics and fold count as reported; no values are inferred</div></div><ClipboardList size={17} color="#728c80" /></div>
-      {evaluationQuery.isLoading ? <div className="skeleton" style={{ height: 140 }} data-testid="loading-evaluation" /> : evaluation ? <EvaluationDetails evaluation={evaluation} /> : <UnavailableInline label="Evaluation results" onRetry={() => evaluationQuery.refetch()} testId="evaluation-unavailable" />}
-    </section>
-    <div className="alert" style={{ marginTop: 16 }} data-testid="notice-validation-context"><Info size={15} className="alert-icon" /><div>Performance metrics are dataset- and validation-specific. They do not establish prospective performance, clinical utility, causality, or suitability for an individual patient.</div></div>
-  </main>;
-}
 
-function RegistryDetails({ registry }: { registry: ModelRegistry }) {
-  return <>
-    <div className="metrics-grid" style={{ maxWidth: 850, marginBottom: 15 }}>
-      <Meta label="Registry version" value={registry.version} /><Meta label="Feature schema" value={registry.feature_schema_version} />
-      <Meta label="Dataset checksum" value={registry.dataset_checksum} mono />
-    </div>
-    {registry.targets?.length ? <div className="table-wrap"><table className="data-table" data-testid="table-model-registry"><thead><tr><th>Target</th><th>Family / version</th><th>Score semantics</th><th>Validation method</th><th>Selection rationale</th></tr></thead><tbody>
-      {registry.targets.map((model) => <tr key={model.target} data-testid={`row-registry-${model.target.toLowerCase()}`}><td><span className="target-chip">{model.target}</span></td><td>{model.model_family} · {model.model_version}</td><td>{model.score_semantics}</td><td>{model.validation_method}</td><td>{model.selection_rationale || 'Not reported'}</td></tr>)}
-    </tbody></table></div> : <EmptyState title="No target models reported" text="The registry response did not include target-specific model records." />}
-  </>;
-}
+  return (
+    <main className="page">
+      <PageHead eyebrow="Evidence ledger" title="Validation & Registry" description="Inspect documented models, validation approaches, and metrics. Unmeasured states remain blank." />
+      
+      <section className="card card-pad mb-6">
+        <h2 className="section-title mb-6">Registry Details</h2>
+        {registryQuery.isLoading ? <div className="skeleton h-24" /> : registryQuery.data ? (
+          <div>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <Meta label="Registry Version" value={registryQuery.data.version} />
+              <Meta label="Schema Version" value={registryQuery.data.feature_schema_version} />
+              <Meta label="Checksum" value={registryQuery.data.dataset_checksum.substring(0,8)} mono />
+            </div>
+          </div>
+        ) : <QueryUnavailable title="Registry unavailable" detail="Could not load registry." onRetry={() => registryQuery.refetch()} />}
+      </section>
 
-function EvaluationDetails({ evaluation }: { evaluation: import('@workspace/api-client-react').Evaluation }) {
-  const metricNames = ['accuracy', 'balanced_accuracy', 'precision', 'recall', 'specificity', 'f1', 'roc_auc', 'pr_auc', 'brier_score'] as const;
-  return <>
-    <div className="metrics-grid" style={{ maxWidth: 850, marginBottom: 15 }}>
-      <Meta label="Dataset source" value={evaluation.dataset_source} /><Meta label="Sample count" value={String(evaluation.sample_count)} mono /><Meta label="Validation method" value={evaluation.validation_method} />
-    </div>
-    {evaluation.targets?.length ? evaluation.targets.map((target) => {
-      const reported = metricNames.filter((metric) => target.metrics[metric] != null);
-      return <div key={target.target} style={{ marginTop: 14 }} data-testid={`evaluation-target-${target.target.toLowerCase()}`}>
-        <div className="target-header"><div><span className="target-chip">{target.target}</span><span className="inline-note" style={{ marginLeft: 9 }}>{target.model_family} · {target.fold_count} folds</span></div></div>
-        {reported.length ? <div className="metrics-grid">{reported.map((metric) => <Meta key={metric} label={metric.replaceAll('_', ' ')} value={formatMetric(target.metrics[metric]!)} mono />)}</div> : <div className="inline-note">No metrics were reported for this target.</div>}
-      </div>;
-    }) : <EmptyState title="No target evaluation reported" text="The service response contains no per-target evaluation records." />}
-  </>;
-}
-
-function formatMetric(value: number) { return Number.isFinite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: 4 }) : 'Not reported'; }
-
-function Meta({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return <div className="metric-card"><div className="metric-key">{label}</div><div className={`metric-value ${mono ? 'mono' : ''}`} style={{ fontSize: value.length > 35 ? 11 : undefined, wordBreak: 'break-word' }} data-testid={`value-${slug(label)}`}>{value}</div></div>;
-}
-
-function UnavailableInline({ label, onRetry, testId }: { label: string; onRetry: () => void; testId: string }) {
-  return <div className="alert" data-testid={testId}><AlertCircle size={15} className="alert-icon" /><div style={{ flex: 1 }}>{label} is unavailable. No evidence has been generated or substituted.</div><button className="button button-small" onClick={onRetry} data-testid={`button-retry-${testId}`}>Retry</button></div>;
+      <section className="card card-pad">
+        <h2 className="section-title mb-6">Evaluation Results</h2>
+        {evaluationQuery.isLoading ? <div className="skeleton h-32" /> : evaluationQuery.data ? (
+          <div>
+             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              <Meta label="Dataset Source" value={evaluationQuery.data.dataset_source} />
+              <Meta label="Sample Count" value={String(evaluationQuery.data.sample_count)} mono />
+              <Meta label="Validation" value={evaluationQuery.data.validation_method} />
+            </div>
+            {evaluationQuery.data.targets?.map((target) => (
+              <div key={target.target} className="mb-6 p-4 rounded-md border border-slate-800 bg-[#0a0f12]">
+                <div className="flex gap-4 items-center mb-4">
+                  <span className="target-chip">{target.target}</span>
+                  <span className="text-xs text-slate-500 font-mono">{target.model_family} · {target.fold_count} folds</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {Object.entries(target.metrics).map(([k, v]) => <Meta key={k} label={k.replace('_', ' ')} value={v != null ? Number(v).toFixed(3) : 'N/A'} mono />)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : <QueryUnavailable title="Evaluation unavailable" detail="Could not load metrics." onRetry={() => evaluationQuery.refetch()} />}
+      </section>
+    </main>
+  );
 }
 
 function Methods() {
-  const schemaQuery = useGetClinicalSchema();
-  const readinessQuery = useGetReadiness();
-  const registryQuery = useGetModelRegistry();
-  const schema = schemaQuery.data;
-  return <main className="page">
-    <PageHead eyebrow="Documentation · intended use and boundaries" title="Methods, provenance & limits" description="A compact guide to the data contract, output semantics, anatomical display, and scientific boundaries of this workbench." />
-    <div className="method-grid">
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>01 · Intended use</div><h2 className="section-title" style={{ marginTop: 8 }}>Research exploration, not clinical decision support.</h2>
-        <p>CoronaryLens 3D presents outputs from four separate target models—overall CAD and vessel-specific LAD, LCX, and RCA. Results are computational estimates for research review. They are not diagnoses, treatment recommendations, or substitutes for clinician interpretation.</p>
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>02 · Input contract</div><h2 className="section-title" style={{ marginTop: 8 }}>Only schema-defined predictors enter the model.</h2>
-        <p>Input controls come from the connected clinical schema. Required fields must be complete; optional empty values are omitted. Target labels and explicitly forbidden predictors are removed before submission.</p>
-        {schema ? <div className="method-code" data-testid="method-schema-version">Schema {schema.schema_version} · {schema.predictor_count} predictors · {schema.source}</div> : <div className="inline-note" data-testid="method-schema-unavailable">{schemaQuery.isLoading ? 'Retrieving active schema…' : 'Active schema unavailable; no predictor definition assumed.'}</div>}
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>03 · Output semantics</div><h2 className="section-title" style={{ marginTop: 8 }}>Probability only when the model says probability.</h2>
-        <p>Each target output carries its own score semantics. A <em>model_score</em> is not a probability. An output labeled <em>probability</em> is an uncalibrated model estimate and does not establish an individual's clinical state. Vessel colors only encode relative positive-class scores from the three vessel models; they do not locate a lesion.</p>
-        <ul><li>CAD is an overall summary; it is not mapped onto a vessel.</li><li>LAD, LCX, and RCA are distinct, independently selectable model outputs.</li></ul>
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>04 · Explanations</div><h2 className="section-title" style={{ marginTop: 8 }}>Contributions describe model behavior.</h2>
-        <p>Feature contributions are requested for one prediction request ID and target. The interface displays only a matching response from the API. Contribution direction and values are reported in the API's stated output space.</p>
-        <p>Associations in a fitted model do not prove causal effects. Explanation methods have limitations and should not be interpreted as mechanistic evidence.</p>
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>05 · Anatomy rendering</div><h2 className="section-title" style={{ marginTop: 8 }}>Schematic geometry, never a lesion map.</h2>
-        <p>The locally rendered coronary tree is a general orientation schematic. Selecting a vessel highlights its own branch and target result. No patient scan, stenosis location, or patient-specific vessel geometry is shown.</p>
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>06 · Dataset & model provenance</div><h2 className="section-title" style={{ marginTop: 8 }}>Read what the service actually reports.</h2>
-        <p>Dataset source, checksum, schema version, model family/version, validation method, and evaluation values are retrieved from backend evidence endpoints. Missing or unavailable data remains explicitly unavailable.</p>
-        {registryQuery.data ? <div className="method-code" data-testid="method-registry-version">Registry {registryQuery.data.version} · schema {registryQuery.data.feature_schema_version} · checksum {registryQuery.data.dataset_checksum}</div> : <div className="inline-note" data-testid="method-registry-unavailable">{registryQuery.isLoading ? 'Retrieving registry…' : 'Registry provenance unavailable.'}</div>}
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>07 · Readiness gate</div><h2 className="section-title" style={{ marginTop: 8 }}>No trained artifacts, no prediction.</h2>
-        <p>Prediction submission is disabled unless the service reports readiness and a complete schema-valid profile is available. This interface does not create mock predictions, demo metrics, or fallback contributions.</p>
-        <div className="method-code" data-testid="method-readiness-status">{readinessQuery.isLoading ? 'Readiness: checking' : readinessQuery.data ? `Readiness: ${readinessQuery.data.ready ? 'ready' : 'not ready'} · ${readinessQuery.data.blockers.join('; ') || 'no blockers reported'}` : 'Readiness unavailable'}</div>
-      </section>
-      <section className="card method-card">
-        <div className="eyebrow" style={{ color: '#81918b' }}>08 · Review checklist</div><h2 className="section-title" style={{ marginTop: 8 }}>Before interpreting any output</h2>
-        <ul><li>Confirm dataset provenance and validation protocol.</li><li>Review target-specific metrics and model versions.</li><li>Distinguish probability from a model score.</li><li>Consider calibration, population shift, missingness, and external validity.</li><li>Do not infer causality or patient-specific anatomy from model contribution displays.</li></ul>
-      </section>
-    </div>
-  </main>;
+  return (
+    <main className="page">
+      <PageHead eyebrow="Documentation" title="Methods, provenance & limits" description="A compact guide to output semantics, bounds, and interpretation of this workbench." />
+      <div className="grid grid-cols-1 md:grid-cols-2">
+        <section className="card card-pad">
+          <h2 className="section-title mb-2">1. Intended Use</h2>
+          <p className="text-sm text-slate-400 leading-relaxed">This is a research environment for exploratory model inference on isolated vascular points. It is explicitly not a diagnostic interface, nor does it possess FDA/CE clearance. Decisions should not be derived from this visual output.</p>
+        </section>
+        <section className="card card-pad">
+          <h2 className="section-title mb-2">2. PBR Anatomical Limitations</h2>
+          <p className="text-sm text-slate-400 leading-relaxed">The integrated three-dimensional anatomical asset provides visual context mimicking the spatial relationship of human coronaries. The representation of the tissue does not reflect patient imaging, but creates an interactive substrate to map discrete model scores in an accessible format.</p>
+        </section>
+      </div>
+    </main>
+  );
 }
 
-export default App;
+function Meta({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="metric-card">
+      <div className="metric-key">{label}</div>
+      <div className={`metric-value ${mono ? 'mono' : ''}`}>{value}</div>
+    </div>
+  );
+}
+
+function QueryUnavailable({ title, detail, onRetry }: any) {
+  return (
+    <div className="alert alert-danger mb-6">
+      <AlertCircle className="alert-icon" size={16} />
+      <div className="flex-1">
+        <strong className="block mb-1">{title}</strong>
+        <span className="text-xs">{detail}</span>
+        <button className="button button-small bg-rose-900/40 text-rose-200 border-rose-800 mt-3" onClick={onRetry}>Retry</button>
+      </div>
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// UTILS
+// -----------------------------------------------------------------------------
+function isForbidden(f: FeatureDefinition, forbidden: string[] = []) {
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const key = norm(f.name), label = norm(f.label);
+  const p = new Set(['cad','cath','lad','lcx','rca']);
+  return p.has(key) || p.has(label) || forbidden.some(e => norm(e) === key || norm(e) === label);
+}
+function hasValue(v: unknown) { return v !== undefined && v !== null && v !== ''; }
+function validateFeature(f: FeatureDefinition, v: unknown): string | undefined {
+  if (!hasValue(v)) return f.required ? 'Required.' : undefined;
+  if ((f.type === 'numeric' || (f.type === 'ordinal' && !f.categories?.length)) && (typeof v !== 'number' || !Number.isFinite(v))) return 'Must be a number.';
+  if (typeof v === 'number') {
+    if (f.minimum != null && v < f.minimum) return `Min: ${f.minimum}`;
+    if (f.maximum != null && v > f.maximum) return `Max: ${f.maximum}`;
+  }
+  if (f.categories?.length && !f.categories.includes(String(v))) return 'Select a valid category.';
+  return undefined;
+}
+function filterPredictorValues(profile: Record<string, unknown>, schema?: ClinicalSchema) {
+  if (!schema) return {};
+  const allowed = new Set(schema.predictors.filter((f) => !isForbidden(f, schema.forbidden_predictors)).map((f) => f.name));
+  return Object.fromEntries(Object.entries(profile).filter(([k]) => allowed.has(k)));
+}
